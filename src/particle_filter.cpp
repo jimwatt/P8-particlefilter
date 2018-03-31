@@ -25,6 +25,21 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// Add random Gaussian noise to each particle.
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 
+	std::default_random_engine rng;
+  	std::normal_distribution<double> ndist(0.0,1.0);
+
+	num_particles = 100;
+
+	for(int pp=0;pp<num_particles;++pp) {
+		const double xval = std[0] * ndist(rng) + x;
+		const double yval = std[1] * ndist(rng) + y;
+		const double thetaval = std[2] * ndist(rng) + theta; 
+		const Particle part{.id=pp,.x=xval,.y=yval,.theta=thetaval,.weight=1.0};
+		particles.push_back(part);
+	}
+
+	is_initialized = true;
+
 }
 
 void ParticleFilter::prediction(double delta_t, double std_pos[], double velocity, double yaw_rate) {
@@ -33,6 +48,31 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	//  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
 	//  http://www.cplusplus.com/reference/random/default_random_engine/
 
+	std::default_random_engine rng;
+  	std::normal_distribution<double> ndist(0.0,1.0);
+
+	for(int pp=0;pp<num_particles;++pp) {
+		const double p_x = particles[pp].x;
+		const double p_y = particles[pp].y;
+		const double v = velocity;
+		const double yaw = particles[pp].theta;
+		const double yawd = yaw_rate;
+
+		double px_p, py_p;
+		if (fabs(yawd) > 0.001) {
+			px_p = p_x + v/yawd * ( sin (yaw + yawd*delta_t) - sin(yaw));
+			py_p = p_y + v/yawd * ( cos(yaw) - cos(yaw+yawd*delta_t) );
+		}
+		else {
+			px_p = p_x + v*delta_t*cos(yaw);
+			py_p = p_y + v*delta_t*sin(yaw);
+		}
+
+		particles[pp].x = px_p + std_pos[0]*ndist(rng);
+		particles[pp].y = py_p + std_pos[1]*ndist(rng);
+		particles[pp].theta = yaw + yawd*delta_t + std_pos[2]*ndist(rng);
+	}
+
 }
 
 void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
@@ -40,6 +80,9 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 	//   observed measurement to this particular landmark.
 	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
 	//   implement this method and use it as a helper during the updateWeights phase.
+
+
+
 
 }
 
@@ -55,6 +98,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   and the following is a good resource for the actual equation to implement (look at equation 
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
+
+
+
 }
 
 void ParticleFilter::resample() {
