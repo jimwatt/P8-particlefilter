@@ -15,12 +15,12 @@ The goals / steps of this project are the following:
 **1. Accuracy.**
 
 - Done.  See figure above.
-- RMSE tracking errors are [X : 0.160, Y : 0.145, YAW : 0.005]
+- RMSE tracking errors are [X : 0.133, Y : 0.124, YAW : 0.004]
 
 **2. Performance.**
 
 - Done.  See figure above.
-- System time for execution is 97.20 seconds.
+- System time for execution is 97.04 seconds.
 
 **3. The Code Implements the Particle Filter**
 
