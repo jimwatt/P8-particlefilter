@@ -13,7 +13,6 @@
 #include "map.h"
 #include "helper_functions.h"
 
-
 struct Particle {
 
 	int id;

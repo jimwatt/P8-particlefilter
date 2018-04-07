@@ -97,16 +97,12 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   http://planning.cs.uiuc.edu/node99.html
 
 	
-
 	const int numlandmarks = cloud_.cols();
 	const int numobservations = observations.size();
 
 	const double xfactor = 1.0 / (2.0 * std_landmark[0]*std_landmark[0]);
 	const double yfactor = 1.0 / (2.0 * std_landmark[1]*std_landmark[1]);
 
-	const int K = 1;
-	Eigen::VectorXi ret_indexes(K);
-	Eigen::VectorXf out_dists_sqr(K);
 	double weightsum = 0.0;
 	for(int pp=0;pp<num_particles;++pp) {	//for each particle
 
