@@ -44,12 +44,13 @@ int main()
   }
 
   // Create particle filter
-  ParticleFilter pf;
+  ParticleFilter pf(map);
 
-  h.onMessage([&pf,&map,&delta_t,&sensor_range,&sigma_pos,&sigma_landmark](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pf,&delta_t,&sensor_range,&sigma_pos,&sigma_landmark](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
+    clock_t tt0 = clock();
 
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
@@ -77,6 +78,7 @@ int main()
             double previous_yawrate = std::stod(j[1]["previous_yawrate"].get<std::string>());
 
             pf.prediction(delta_t, sigma_pos, previous_velocity, previous_yawrate);
+
     		  }
 
   		  // receive noisy observation data from the simulator
@@ -103,8 +105,8 @@ int main()
           }
 
     		  // Update the weights and resample
-    		  pf.updateWeights(sensor_range, sigma_landmark, noisy_observations, map);
-    		  pf.resample();
+    		  pf.updateWeights(sensor_range, sigma_landmark, noisy_observations);
+
 
     		  // Calculate and output the average weighted error of the particle filter over all time steps so far.
     		  vector<Particle> particles = pf.particles;
@@ -119,8 +121,8 @@ int main()
       			}
             weight_sum += particles[i].weight;
   		    }
-    		  cout << "highest w " << highest_weight << endl;
-    		  cout << "average w " << weight_sum/num_particles << endl;
+    		  // cout << "highest w " << highest_weight << endl;
+    		  // cout << "average w " << weight_sum/num_particles << endl;
 
           json msgJson;
           msgJson["best_particle_x"] = best_particle.x;
@@ -135,6 +137,8 @@ int main()
           auto msg = "42[\"best_particle\"," + msgJson.dump() + "]";
           // std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+
+          pf.resample();
     
         }
       } 
@@ -143,7 +147,8 @@ int main()
         ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
       }
     }
-  });
+
+    });
 
   // We don't need this since we're not using HTTP but if it's removed the program
   // doesn't compile :-(

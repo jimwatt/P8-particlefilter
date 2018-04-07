@@ -15,26 +15,38 @@
 #include <string>
 #include <iterator>
 
+
 #include "particle_filter.h"
 
-using namespace std;
+
+
+ParticleFilter::ParticleFilter(const Map& map) : num_particles(0), is_initialized(false) {
+
+	const int N = map.landmark_list.size();
+	cloud_ = Eigen::MatrixXf::Zero(2,N);
+	for (size_t i = 0; i < N; i++) {
+		cloud_(0,i) = map.landmark_list[i].x_f;
+		cloud_(1,i) = map.landmark_list[i].y_f;
+	}
+}
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// TODO: Set the number of particles. Initialize all particles to first position (based on estimates of 
 	//   x, y, theta and their uncertainties from GPS) and all weights to 1. 
 	// Add random Gaussian noise to each particle.
-	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 
-	std::default_random_engine rng;
-  	std::normal_distribution<double> ndist(0.0,1.0);
+	num_particles = 10;
 
-	num_particles = 100;
+	rng.seed(123456);
+
+	one_over_N = 1.0/double(num_particles);
 
 	for(int pp=0;pp<num_particles;++pp) {
-		const double xval = std[0] * ndist(rng) + x;
-		const double yval = std[1] * ndist(rng) + y;
-		const double thetaval = std[2] * ndist(rng) + theta; 
-		const Particle part{.id=pp,.x=xval,.y=yval,.theta=thetaval,.weight=1.0};
+		const Particle part{.id=pp,
+			.x = x + std[0] * ndist(rng),
+			.y = y + std[1] * ndist(rng),
+			.theta = theta + std[2] * ndist(rng),
+			.weight = one_over_N};
 		particles.push_back(part);
 	}
 
@@ -48,46 +60,31 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	//  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
 	//  http://www.cplusplus.com/reference/random/default_random_engine/
 
-	std::default_random_engine rng;
-  	std::normal_distribution<double> ndist(0.0,1.0);
-
+	double px_p, py_p;
 	for(int pp=0;pp<num_particles;++pp) {
-		const double p_x = particles[pp].x;
-		const double p_y = particles[pp].y;
-		const double v = velocity;
-		const double yaw = particles[pp].theta;
-		const double yawd = yaw_rate;
 
-		double px_p, py_p;
-		if (fabs(yawd) > 0.001) {
-			px_p = p_x + v/yawd * ( sin (yaw + yawd*delta_t) - sin(yaw));
-			py_p = p_y + v/yawd * ( cos(yaw) - cos(yaw+yawd*delta_t) );
+		const double yaw = particles[pp].theta;
+
+		if (fabs(yaw_rate) > 0.001) {
+			px_p = particles[pp].x + velocity/yaw_rate * ( sin (yaw + yaw_rate*delta_t) - sin(yaw));
+			py_p = particles[pp].y + velocity/yaw_rate * ( cos(yaw) - cos(yaw+yaw_rate*delta_t) );
 		}
 		else {
-			px_p = p_x + v*delta_t*cos(yaw);
-			py_p = p_y + v*delta_t*sin(yaw);
+			px_p = particles[pp].x + velocity*delta_t*cos(yaw);
+			py_p = particles[pp].y + velocity*delta_t*sin(yaw);
 		}
 
 		particles[pp].x = px_p + std_pos[0]*ndist(rng);
 		particles[pp].y = py_p + std_pos[1]*ndist(rng);
-		particles[pp].theta = yaw + yawd*delta_t + std_pos[2]*ndist(rng);
+		particles[pp].theta = yaw + yaw_rate*delta_t + std_pos[2]*ndist(rng);
 	}
 
 }
 
-void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
-	// TODO: Find the predicted measurement that is closest to each observed measurement and assign the 
-	//   observed measurement to this particular landmark.
-	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
-	//   implement this method and use it as a helper during the updateWeights phase.
 
-
-
-
-}
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
-		const std::vector<LandmarkObs> &observations, const Map &map_landmarks) {
+		const std::vector<LandmarkObs> &observations) {
 	// TODO: Update the weights of each particle using a mult-variate Gaussian distribution. You can read
 	//   more about this distribution here: https://en.wikipedia.org/wiki/Multivariate_normal_distribution
 	// NOTE: The observations are given in the VEHICLE'S coordinate system. Your particles are located
@@ -99,7 +96,57 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
 
+	
 
+	const int numlandmarks = cloud_.cols();
+	const int numobservations = observations.size();
+
+	const double xfactor = 1.0 / (2.0 * std_landmark[0]*std_landmark[0]);
+	const double yfactor = 1.0 / (2.0 * std_landmark[1]*std_landmark[1]);
+
+	const int K = 1;
+	Eigen::VectorXi ret_indexes(K);
+	Eigen::VectorXf out_dists_sqr(K);
+	double weightsum = 0.0;
+	for(int pp=0;pp<num_particles;++pp) {	//for each particle
+
+		const double th = particles[pp].theta;
+
+		Eigen::Matrix2f R;
+		R << cos(th), -sin(th), sin(th), cos(th);
+
+		Eigen::Vector2f r;
+		r << particles[pp].x , particles[pp].y;
+
+		for(int ii=0;ii<numobservations;++ii) {	//for each observation
+
+			// convert observation to map frame
+			Eigen::Vector2f obsxy;
+			obsxy << observations[ii].x, observations[ii].y;
+			Eigen::Vector2f obs_mapframe = R * obsxy + r;
+
+			int mindex;
+			double mindistance2 = std::numeric_limits<double>::infinity();
+			for(int jj=0;jj<numlandmarks;++jj) {
+				const double d2 = (cloud_.col(jj) - obs_mapframe).squaredNorm();
+				if(d2<mindistance2) {
+					mindex = jj;
+					mindistance2 = d2;
+				} 
+			}
+
+			const Eigen::Vector2f ds = obs_mapframe - cloud_.col(mindex);
+			
+			const double exponent = (ds[0]*ds[0]) * xfactor + (ds[1]*ds[1]) * yfactor;
+			particles[pp].weight *= exp(-exponent);
+			weightsum += particles[pp].weight;
+		}
+	}
+
+	// normalize particle weights
+	for(int pp=0;pp<num_particles;++pp) {
+		particles[pp].weight /= weightsum;
+	}
 
 }
 
@@ -108,45 +155,47 @@ void ParticleFilter::resample() {
 	// NOTE: You may find std::discrete_distribution helpful here.
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
 
+	std::vector<double> weights(num_particles,0.0);
+	for(int pp=0;pp<num_particles;++pp) {
+		weights[pp] = particles[pp].weight;
+	}
+	std::discrete_distribution<int> discretedist(weights.begin(), weights.end());
+
+	std::vector<Particle> newparticles(num_particles);
+	for(int ii=0;ii<num_particles;++ii) {
+		newparticles[ii] = particles[discretedist(rng)];
+		newparticles[ii].weight = one_over_N;
+	}
+
+	particles = newparticles;
+
 }
 
-Particle ParticleFilter::SetAssociations(Particle& particle, const std::vector<int>& associations, 
-                                     const std::vector<double>& sense_x, const std::vector<double>& sense_y)
-{
-    //particle: the particle to assign each listed association, and association's (x,y) world coordinates mapping to
-    // associations: The landmark id that goes along with each listed association
-    // sense_x: the associations x mapping already converted to world coordinates
-    // sense_y: the associations y mapping already converted to world coordinates
 
-    particle.associations= associations;
-    particle.sense_x = sense_x;
-    particle.sense_y = sense_y;
-}
-
-string ParticleFilter::getAssociations(Particle best)
+std::string ParticleFilter::getAssociations(Particle best)
 {
-	vector<int> v = best.associations;
-	stringstream ss;
-    copy( v.begin(), v.end(), ostream_iterator<int>(ss, " "));
-    string s = ss.str();
+	std::vector<int> v = best.associations;
+	std::stringstream ss;
+    std::copy( v.begin(), v.end(), std::ostream_iterator<int>(ss, " "));
+    std::string s = ss.str();
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
-string ParticleFilter::getSenseX(Particle best)
+std::string ParticleFilter::getSenseX(Particle best)
 {
-	vector<double> v = best.sense_x;
-	stringstream ss;
-    copy( v.begin(), v.end(), ostream_iterator<float>(ss, " "));
-    string s = ss.str();
+	std::vector<double> v = best.sense_x;
+	std::stringstream ss;
+    copy( v.begin(), v.end(), std::ostream_iterator<float>(ss, " "));
+    std::string s = ss.str();
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
-string ParticleFilter::getSenseY(Particle best)
+std::string ParticleFilter::getSenseY(Particle best)
 {
-	vector<double> v = best.sense_y;
-	stringstream ss;
-    copy( v.begin(), v.end(), ostream_iterator<float>(ss, " "));
-    string s = ss.str();
+	std::vector<double> v = best.sense_y;
+	std::stringstream ss;
+    std::copy( v.begin(), v.end(), std::ostream_iterator<float>(ss, " "));
+    std::string s = ss.str();
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
