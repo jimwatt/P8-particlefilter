@@ -8,21 +8,24 @@ The goals / steps of this project are the following:
 * Implement a particle filter to estimate the location of a moving vehicle given an *a priori* map of known landmarks and a stream of noisy measurements of those landmarks.
 
 [//]: # "Image References"
-[image1]: ./images/rmse.png
+[image1]: ./particlefilter.png
 ## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
+![alt text][image1]
+
 **1. Accuracy.**
 
 - Done.  See figure above.
-- RMSE tracking errors are [X : 0.0686, Y : 0.0816, VX : 0.3549, VZ : 0.2345]
+- RMSE tracking errors are [X : 0.160, Y : 0.145, YAW : 0.005]
 
 **2. Performance.**
 
 - Done.  See figure above.
-- System time for execution is 
+- System time for execution is 97.20 seconds.
 
 **3. The Code Implements the Particle Filter**
 
 * The particle filter algorithm is implemented in [./src/particle_filter.cpp](./src/particle_filter.cpp).
+* The main functional components are *predict*, *update weights*, and *resample*.
 
 ---
 
@@ -30,7 +33,8 @@ The goals / steps of this project are the following:
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  
 
-* The UKF works well and handles the nonlinear radar measurement function and bicycle prediction functions well.
-* Once the UKF was implemented, I did have to spend a few iterations finding the appropriate values for the prediction noise, and the state covariance matrix when initializing the state.  I did this by outputting each of the state variable values to obtain a rough feel for their magnitude and variation.  I treated them as independent random variables in the initialization.
+* The particle filter was straightforward to implement and worked well.  No major algorithmic improvements were required to improve the accuracy and execution times.
+* Once the particle filter was implemented, I did try to improve runtime performance using several Nearest Neighbor libraries (`ANN`, `FLANN`,  and `NABO`, for example.)  These libraries index the map landmark locations into a kd-tree, allowing fast look up of nearest neighbors for a query point. Unfortunately, since the map did not have many landmarks (only 42), these approaches did not provide any appreciable acceleration.  In a very dense map, with hundreds of thousands of points, these approaches will be indispensable.
+* An improvement to the current code would be to assign observations to landmarks using a 2D assignment solver to optimize global cost (using the Jonker-Volgenant-Castanon algorithm, for example) rather than simply choosing nearest neighbors.
 
 
